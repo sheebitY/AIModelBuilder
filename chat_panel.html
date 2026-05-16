@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #2b2b2b;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        #chatHistory {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        #userInput {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #3c3c3c;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+        }
+        #userInput:focus {
+            border-color: #0078d4;
+        }
+        #sendBtn {
+            padding: 8px 20px;
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #sendBtn:hover {
+            background-color: #106ebe;
+        }
+        #sendBtn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .message-user {
+            color: #4fc3f7;
+        }
+        .message-ai {
+            color: #81c784;
+        }
+        .message-error {
+            color: #ef5350;
+        }
+        .message-result {
+            color: #ffb74d;
+        }
+        .message-thinking {
+            color: #aaa;
+            font-style: italic;
+        }
+        #debugLog {
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 3px;
+            font-size: 11px;
+            color: #888;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="chatHistory">欢迎使用 AI 建模助手！
+请描述你想要创建的模型。
+
+例如：创建一个台灯</div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="输入描述..." onkeypress="if(event.keyCode===13)sendMessage()">
+        <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </div>
+    <div id="debugLog"></div>
+
+    <script>
+        var chatHistory = document.getElementById('chatHistory');
+        var userInput = document.getElementById('userInput');
+        var sendBtn = document.getElementById('sendBtn');
+        var debugLog = document.getElementById('debugLog');
+        var isProcessing = false;
+        var messageCount = 0;
+        var pollTimer = null;
+        
+        // 响应文件路径
+        var responseFilePath = 'response.json';
+
+        function log(msg) {
+            var time = new Date().toLocaleTimeString();
+            var logEntry = document.createElement('div');
+            logEntry.textContent = '[' + time + '] ' + msg;
+            debugLog.appendChild(logEntry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log('[AI Model Builder] ' + msg);
+        }
+
+        function sendMessage() {
+            var text = userInput.value.trim();
+            if (!text || isProcessing) return;
+
+            messageCount++;
+            log('发送消息 #' + messageCount + ': ' + text.substring(0, 30));
+
+            isProcessing = true;
+            sendBtn.disabled = true;
+            userInput.disabled = true;
+
+            // 显示用户消息
+            appendMessage('[用户]: ' + text, 'message-user');
+
+            // 显示思考中
+            var thinkingSpan = appendMessage('[AI]: 思考中...', 'message-thinking');
+
+            // 发送到 Python
+            try {
+                adsk.fusionSendData('send_message', text);
+                log('消息已发送到Python');
+                
+                // 开始轮询
+                startPolling();
+            } catch(e) {
+                log('发送失败: ' + e.message);
+            }
+
+            // 清空输入框
+            userInput.value = '';
+
+            // 超时保护：60秒后自动重置
+            setTimeout(function() {
+                if (isProcessing) {
+                    log('消息 #' + messageCount + ' 超时');
+                    stopPolling();
+                    isProcessing = false;
+                    sendBtn.disabled = false;
+                    userInput.disabled = false;
+                    var thinkingElements = document.querySelectorAll('.message-thinking');
+                    if (thinkingElements.length > 0) {
+                        thinkingElements[thinkingElements.length - 1].textContent = '[AI]: 响应超时（60秒），请重试';
+                        thinkingElements[thinkingElements.length - 1].className = 'message-error';
+                    }
+                }
+            }, 60000);
+        }
+
+        function startPolling() {
+            log('开始轮询响应文件...');
+            // 每500毫秒轮询一次
+            pollTimer = setInterval(function() {
+                checkResponseFile();
+            }, 500);
+        }
+
+        function stopPolling() {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                log('停止轮询');
+            }
+        }
+
+        function checkResponseFile() {
+            // 使用 fetch 读取响应文件
+            fetch(responseFilePath + '?t=' + Date.now())
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function(text) {
+                    if (!text || text.trim() === '') {
+                        return;
+                    }
+                    
+                    try {
+                        var data = JSON.parse(text);
+                        // 检查是否是有效响应（不是 "ready" 状态）
+                        if (data.status === 'ready') {
+                            return; // 没有新数据
+                        }
+                        
+                        log('收到响应数据: ' + text.substring(0, 100));
+                        stopPolling();
+                        receiveMessage(data);
+                    } catch(e) {
+                        // JSON解析失败，可能是文件正在写入
+                    }
+                })
+                .catch(function(error) {
+                    // 忽略错误，可能是文件不存在或正在写入
+                });
+        }
+
+        function appendMessage(text, className) {
+            var span = document.createElement('div');
+            span.className = className || '';
+            span.textContent = text;
+            chatHistory.appendChild(span);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return span;
+        }
+
+        function receiveMessage(data) {
+            log('receiveMessage 被调用: ' + JSON.stringify(data).substring(0, 100));
+            
+            isProcessing = false;
+            sendBtn.disabled = false;
+            userInput.disabled = false;
+
+            // 移除"思考中..."
+            var thinkingElements = document.querySelectorAll('.message-thinking');
+            if (thinkingElements.length > 0) {
+                thinkingElements[thinkingElements.length - 1].remove();
+            }
+
+            if (data.error) {
+                appendMessage('[错误]: ' + data.error, 'message-error');
+            } else {
+                if (data.reply) {
+                    appendMessage('[AI]: ' + data.reply, 'message-ai');
+                }
+                if (data.result) {
+                    appendMessage('[执行结果]:\n  ' + data.result, 'message-result');
+                }
+                if (data.scene !== undefined) {
+                    appendMessage('[场景]: ' + data.scene + '个实体', 'message-result');
+                }
+            }
+
+            userInput.focus();
+            log('响应处理完成');
+        }
+
+        // 注册接收消息的回调（备用）
+        window.adsk = window.adsk || {};
+        window.adsk.fusionReceiveData = function(messageType, data) {
+            log('>>> fusionReceiveData 被调用 <<<');
+            log('messageType: ' + messageType);
+            log('data: ' + (typeof data === 'string' ? data.substring(0, 200) : JSON.stringify(data).substring(0, 200)));
+        };
+
+        log('面板初始化完成');
+        log('使用文件轮询方式通信');
+        userInput.focus();
+    </script>
+</body>
+</html>

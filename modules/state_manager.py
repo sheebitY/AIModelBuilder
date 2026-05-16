@@ -113,7 +113,7 @@ class ModelState:
 
     def get_messages_for_ai(self, user_input, system_prompt):
         """构建发送给AI的消息数组"""
-        from .prompts import describe_scene
+        from modules.prompts import describe_scene
 
         system_msg = {"role": "system", "content": system_prompt}
         scene_desc = describe_scene(self)

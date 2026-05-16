@@ -3,7 +3,7 @@
 import adsk.core
 import adsk.fusion
 
-from .state_manager import state
+from modules.state_manager import state
 
 
 def mm_to_cm(mm):
