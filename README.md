@@ -73,8 +73,8 @@
    编辑 `modules/config.py` 文件：
    ```python
    API_KEY = "你的API密钥"
-   API_URL = "https://api.xiaomimimo.com/v1/chat/completions"
-   MODEL = "mimo-v2.5"
+   API_URL = "API url"
+   MODEL = "模型名称"
    ```
    
    **注意**：`config.py` 已被 `.gitignore` 排除，不会提交到版本库，保护你的API密钥安全。
