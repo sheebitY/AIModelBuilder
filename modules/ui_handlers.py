@@ -17,6 +17,7 @@ from modules.operations import execute_operations
 # 全局变量存储面板引用
 _palette = None
 _handlers = []
+_is_processing = False  # 标志位，防止重复处理
 
 # 数据文件路径
 _data_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'response.json')
@@ -128,8 +129,14 @@ class PaletteHTMLHandler(adsk.core.HTMLEventHandler):
 
             # 处理 JavaScript 发来的消息
             if action == 'send_message':
+                global _is_processing
+                if _is_processing:
+                    log("正在处理中，忽略重复请求")
+                    return
+                
                 user_text = data.strip()
                 if user_text:
+                    _is_processing = True
                     log("启动处理线程，用户输入: {}".format(user_text[:50]))
                     thread = threading.Thread(target=process_user_input, args=(user_text,))
                     thread.daemon = True
@@ -191,6 +198,7 @@ def send_to_panel(data):
 
 def process_user_input(user_text):
     """处理用户输入（在单独线程中运行）"""
+    global _is_processing
     log("===== process_user_input 开始 =====")
     log("用户输入: {}".format(user_text))
 
@@ -200,6 +208,7 @@ def process_user_input(user_text):
             state.reset()
             send_to_panel({'reply': '已重置建模状态。请描述你想要创建的模型。'})
             log("已重置状态")
+            _is_processing = False
             return
 
         # 添加用户消息到历史
@@ -219,6 +228,7 @@ def process_user_input(user_text):
             log(error_msg)
             log(traceback.format_exc())
             send_to_panel({'error': error_msg})
+            _is_processing = False
             return
 
         # 记录AI回复
@@ -265,9 +275,11 @@ def process_user_input(user_text):
         log("send_to_panel 返回: {}".format(send_result))
         
         log("===== process_user_input 完成 =====")
+        _is_processing = False
 
     except Exception as e:
         error_msg = "处理异常: {}".format(str(e))
         log(error_msg)
         log(traceback.format_exc())
         send_to_panel({'error': error_msg})
+        _is_processing = False

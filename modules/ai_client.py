@@ -34,7 +34,7 @@ def call_ai_api(messages):
 
     try:
         print("[AI Client] 发送请求...")
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as response:
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as response:
             print("[AI Client] 收到响应，状态码: {}".format(response.status))
             response_data = response.read().decode("utf-8")
             print("[AI Client] 响应数据大小: {} bytes".format(len(response_data)))
@@ -47,7 +47,7 @@ def call_ai_api(messages):
         print("[AI Client] {}".format(error_msg))
         raise Exception(error_msg)
     except TimeoutError:
-        error_msg = "请求超时（30秒）"
+        error_msg = "请求超时（60秒）"
         print("[AI Client] {}".format(error_msg))
         raise Exception(error_msg)
     except Exception as e:

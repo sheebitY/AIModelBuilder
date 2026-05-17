@@ -38,9 +38,10 @@ class ModelState:
         }
         return entity_id
 
-    def register_component(self, component, name=None):
+    def register_component(self, component, name=None, comp_id=None):
         """注册新组件"""
-        comp_id = self.generate_component_id()
+        if comp_id is None:
+            comp_id = self.generate_component_id()
         if name is None:
             name = f"Component_{comp_id}"
         comp_info = {"id": comp_id, "name": name, "component": component}

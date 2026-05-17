@@ -1,5 +1,5 @@
 # ============ 配置文件 ============
 
-API_KEY = "sk-cy8swvyva4k467ictp3ktbs220ggtzufw6zhhrjp6ggef2bi"
-API_URL = "https://api.xiaomimimo.com/v1/chat/completions"
-MODEL = "mimo-v2.5"
+API_KEY = ""# 在此处填写您的API密钥
+API_URL = ""# 在此处填写API的URL地址
+MODEL = ""# 在此处填写您要使用的模型名称，例如 "gpt-3.5-turbo" 或 "gpt-4"

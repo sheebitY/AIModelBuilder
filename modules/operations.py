@@ -11,6 +11,20 @@ def mm_to_cm(mm):
     return mm / 10.0
 
 
+def _is_part_design(design):
+    """检查当前文档是否是零件设计（单体设计）"""
+    # 简化逻辑：总是返回False，让用户在当前文档中工作
+    # 如果用户需要多组件，应该手动创建部件设计文档
+    return False
+
+
+def _convert_to_assembly_design(design):
+    """将零件设计转换为部件设计 - 简化版本，避免阻塞"""
+    # 简化逻辑：直接返回当前design，不做任何转换
+    # 用户需要手动创建部件设计文档
+    return design
+
+
 def execute_operations(operations, ui):
     """执行一个或多个操作"""
     design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
@@ -50,8 +64,7 @@ def execute_operations(operations, ui):
         except Exception as e:
             error_msg = f"操作失败 [{op.get('action', '?')}]: {str(e)}"
             results.append(error_msg)
-            if ui:
-                ui.messageBox(error_msg)
+            print(f"[AI Model Builder] {error_msg}")
 
     return results
 
@@ -62,16 +75,24 @@ def execute_operations(operations, ui):
 def op_create_component(design, op):
     """创建新组件"""
     name = op.get("name", "未命名组件")
-    comp_id = op.get("component_id") or state.generate_component_id()
+    requested_comp_id = op.get("component_id")
+
+    # 检查文档类型，如果是零件设计文档则需要转换为部件设计文档
+    if _is_part_design(design):
+        design = _convert_to_assembly_design(design)
 
     rootComp = design.rootComponent
     occurrences = rootComp.occurrences
-    occurrence = occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    
+    # 创建单位矩阵作为初始变换
+    transform = adsk.core.Matrix3D.create()
+    occurrence = occurrences.addNewComponent(transform)
 
     component = occurrence.component
     component.name = name
 
-    state.register_component(component, name)
+    # 注册组件，使用 register_component 返回的 comp_id
+    comp_id = state.register_component(component, name, requested_comp_id)
     state.current_component = state.components[comp_id]
 
     return f"创建组件: {comp_id} ({name})"
@@ -320,8 +341,11 @@ def _move_body(body, x, y, z):
     input_bodies = adsk.core.ObjectCollection.create()
     input_bodies.add(body)
 
-    vector = adsk.core.Vector3D.create(x, y, z)
-    moveInput = moves.createInput(input_bodies, vector)
+    # 创建变换矩阵
+    transform = adsk.core.Matrix3D.create()
+    transform.translation = adsk.core.Vector3D.create(x, y, z)
+    
+    moveInput = moves.createInput(input_bodies, transform)
     moves.add(moveInput)
 
 
@@ -812,8 +836,13 @@ def op_apply_transform(rootComp, op):
         moves = comp.features.moveFeatures
         input_bodies = adsk.core.ObjectCollection.create()
         input_bodies.add(body)
+        
+        # 创建旋转移动特征
         angle_input = adsk.core.ValueInput.createByString(f"{angle} deg")
-        moveInput = moves.createInput(input_bodies, axis, angle_input)
+        
+        # 使用 createInput 的重载方法，指定移动类型为旋转
+        moveInput = moves.createInput(input_bodies, adsk.fusion.MoveFeatureOperations.RotateMoveType)
+        moveInput.defineAsRotate(axis, angle_input)
         moves.add(moveInput)
 
     state.add_to_history(f"变换{transform_type} [{target_id}]", "成功")
