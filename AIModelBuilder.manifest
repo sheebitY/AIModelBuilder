@@ -2,7 +2,7 @@
     "autodeskProduct": "Fusion360",
     "type": "addin",
     "id": "d37926fd-aaf1-4676-b8c7-50c18f022532",
-    "author": "AI Model Builder",
+    "author": "sheebit",
     "description": {
         "": "AI建模助手 - 用自然语言创建3D模型"
     },
